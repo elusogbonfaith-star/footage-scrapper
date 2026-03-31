@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>The Finder — Stock Footage Scraper</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --gold: #C9A84C;
+    --gold-dim: #8a6e2f;
+    --bg: #0a0a0a;
+    --surface: #111111;
+    --surface2: #181818;
+    --border: #2a2a2a;
+    --border-gold: rgba(201,168,76,0.25);
+    --text: #e8e2d6;
+    --text-muted: #6b6560;
+    --text-dim: #4a4540;
+    --red: #c0392b;
+    --green: #27ae60;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 300;
+    min-height: 100vh;
+    padding: 0;
+  }
+
+  /* Grid background */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(201,168,76,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(201,168,76,0.03) 1px, transparent 1px);
+    background-size: 48px 48px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .wrap { position: relative; z-index: 1; max-width: 900px; margin: 0 auto; padding: 48px 24px 80px; }
+
+  /* Header */
+  .header { margin-bottom: 48px; }
+  .logo-row { display: flex; align-items: center; gap: 14px; margin-bottom: 8px; }
+  .logo-icon {
+    width: 36px; height: 36px; border: 1px solid var(--gold);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Cormorant Garamond', serif; font-size: 18px; color: var(--gold);
+    transform: rotate(45deg);
+  }
+  .logo-icon span { transform: rotate(-45deg); display: block; }
+  h1 {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 32px; font-weight: 600; letter-spacing: 0.02em;
+    color: var(--text);
+  }
+  h1 em { color: var(--gold); font-style: italic; }
+  .tagline { font-size: 13px; color: var(--text-muted); letter-spacing: 0.08em; text-transform: uppercase; margin-top: 4px; }
+
+  /* Sections */
+  .section { margin-bottom: 28px; }
+  .section-label {
+    font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase;
+    color: var(--gold-dim); margin-bottom: 10px; display: flex; align-items: center; gap: 8px;
+  }
+  .section-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  textarea {
+    width: 100%; min-height: 180px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 4px; padding: 16px;
+    font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 300;
+    color: var(--text); line-height: 1.7; resize: vertical; outline: none;
+    transition: border-color 0.2s;
+  }
+  textarea:focus { border-color: var(--border-gold); }
+  textarea::placeholder { color: var(--text-dim); }
+
+  .keys-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .options-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+
+  .field label {
+    display: block; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--text-muted); margin-bottom: 6px;
+  }
+  .field input {
+    width: 100%; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 4px; padding: 10px 12px;
+    font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text);
+    outline: none; transition: border-color 0.2s;
+  }
+  .field input:focus { border-color: var(--border-gold); }
+
+  /* Checkboxes */
+  .check-row { display: flex; gap: 20px; flex-wrap: wrap; }
+  .check-item { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+  .check-item input[type=checkbox] { appearance: none; width: 16px; height: 16px;
+    border: 1px solid var(--border); background: var(--surface); border-radius: 2px;
+    cursor: pointer; position: relative; transition: border-color 0.2s; }
+  .check-item input[type=checkbox]:checked { border-color: var(--gold); background: var(--gold); }
+  .check-item input[type=checkbox]:checked::after {
+    content: ''; position: absolute; left: 4px; top: 1px;
+    width: 5px; height: 9px; border: 2px solid #000;
+    border-left: none; border-top: none; transform: rotate(45deg);
+  }
+  .check-item span { font-size: 13px; color: var(--text-muted); }
+
+  /* Run button */
+  .btn-run {
+    width: 100%; padding: 14px;
+    background: transparent; border: 1px solid var(--gold);
+    color: var(--gold); font-family: 'DM Sans', sans-serif;
+    font-size: 13px; font-weight: 500; letter-spacing: 0.12em;
+    text-transform: uppercase; cursor: pointer; border-radius: 4px;
+    transition: background 0.2s, color 0.2s;
+    position: relative; overflow: hidden;
+  }
+  .btn-run:hover:not(:disabled) { background: var(--gold); color: #000; }
+  .btn-run:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  /* Status */
+  .status-wrap { margin-top: 20px; }
+  .status {
+    padding: 12px 16px; background: var(--surface);
+    border-left: 2px solid var(--border-gold);
+    font-size: 13px; color: var(--text-muted);
+    font-family: 'DM Mono', monospace; line-height: 1.5;
+    min-height: 42px;
+  }
+  .status.err { border-left-color: var(--red); color: #e57373; }
+  .status.ok { border-left-color: var(--green); color: #81c784; }
+
+  /* Progress bar */
+  .progress-outer {
+    height: 2px; background: var(--border); margin-top: 8px; border-radius: 1px; overflow: hidden;
+  }
+  .progress-inner {
+    height: 100%; background: var(--gold); width: 0%;
+    transition: width 0.4s ease; border-radius: 1px;
+  }
+
+  /* Keywords */
+  .kw-section { margin-top: 24px; }
+  .kw-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .kw-pill {
+    font-size: 11px; padding: 4px 12px; border-radius: 999px;
+    border: 1px solid var(--border-gold); color: var(--gold);
+    font-family: 'DM Mono', monospace; background: rgba(201,168,76,0.05);
+  }
+
+  /* Stats */
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 24px; }
+  .stat {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 4px; padding: 14px 16px;
+  }
+  .stat-n { font-size: 26px; font-weight: 500; color: var(--text); font-family: 'Cormorant Garamond', serif; }
+  .stat-l { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-top: 2px; }
+
+  /* Table */
+  .table-wrap { margin-top: 28px; overflow-x: auto; border: 1px solid var(--border); border-radius: 4px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 700px; }
+  thead { background: var(--surface2); }
+  th {
+    text-align: left; padding: 10px 12px;
+    font-size: 10px; font-weight: 500; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--text-muted);
+    border-bottom: 1px solid var(--border); white-space: nowrap;
+  }
+  td {
+    padding: 9px 12px; border-bottom: 1px solid var(--border);
+    color: var(--text); vertical-align: middle;
+    font-family: 'DM Sans', sans-serif;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--surface2); }
+
+  .badge {
+    display: inline-block; font-size: 10px; padding: 2px 8px;
+    border-radius: 2px; font-weight: 500; letter-spacing: 0.05em;
+    font-family: 'DM Mono', monospace;
+  }
+  .b-video { background: rgba(201,168,76,0.12); color: var(--gold); border: 1px solid rgba(201,168,76,0.2); }
+  .b-photo { background: rgba(39,174,96,0.1); color: #81c784; border: 1px solid rgba(39,174,96,0.2); }
+  .b-px { color: #90caf9; background: rgba(144,202,249,0.08); border: 1px solid rgba(144,202,249,0.15); }
+  .b-pb { color: #ffcc80; background: rgba(255,204,128,0.08); border: 1px solid rgba(255,204,128,0.15); }
+
+  a { color: var(--gold); text-decoration: none; font-size: 11px; }
+  a:hover { text-decoration: underline; }
+
+  /* Thumb preview */
+  .thumb { width: 52px; height: 34px; object-fit: cover; border-radius: 2px; border: 1px solid var(--border); background: var(--surface2); display: block; }
+
+  /* Download button */
+  .btn-dl {
+    margin-top: 20px; padding: 11px 28px;
+    background: transparent; border: 1px solid var(--border);
+    color: var(--text-muted); font-family: 'DM Sans', sans-serif;
+    font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase;
+    cursor: pointer; border-radius: 4px; transition: border-color 0.2s, color 0.2s;
+  }
+  .btn-dl:hover { border-color: var(--gold); color: var(--gold); }
+
+  /* Fade in */
+  .fade-in { animation: fadeIn 0.4s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+  @media (max-width: 600px) {
+    .keys-grid, .options-grid { grid-template-columns: 1fr; }
+    .stats { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="header">
+    <div class="logo-row">
+      <div class="logo-icon"><span>V</span></div>
+      <h1>The <em>Finder</em></h1>
+    </div>
+    <p class="tagline">Stock Footage &amp; Photo Scraper — Pexels + Pixabay</p>
+  </div>
+
+  <!-- Script Input -->
+  <div class="section">
+    <div class="section-label">Your YouTube Script</div>
+    <textarea id="script" placeholder="Paste your full YouTube script here. Claude will read the context and extract the most visually relevant search keywords automatically..."></textarea>
+  </div>
+
+  <!-- API Keys -->
+  <div class="section">
+    <div class="section-label">API Keys</div>
+    <div class="keys-grid">
+      <div class="field">
+        <label>Pexels API Key</label>
+        <input type="text" id="pexels-key" value="ngjiKUE5JfXhuMi7C5ZLpr8zu1xqrYmu7CckyN0mh5fnVtcuhnbZSb0N" />
+      </div>
+      <div class="field">
+        <label>Pixabay API Key</label>
+        <input type="text" id="pixabay-key" value="55248891-5090da90850925c0705e24e94" />
+      </div>
+    </div>
+  </div>
+
+  <!-- Options -->
+  <div class="section">
+    <div class="section-label">Options</div>
+    <div class="options-grid" style="margin-bottom:14px;">
+      <div class="field">
+        <label>Max Keywords</label>
+        <input type="text" id="max-kw" value="10" />
+      </div>
+      <div class="field">
+        <label>Results per Keyword</label>
+        <input type="text" id="per-kw" value="3" />
+      </div>
+      <div class="field">
+        <label>Claude API Key</label>
+        <input type="text" id="claude-key" placeholder="sk-ant-..." />
+      </div>
+    </div>
+    <div class="check-row">
+      <label class="check-item"><input type="checkbox" id="inc-videos" checked /><span>Videos</span></label>
+      <label class="check-item"><input type="checkbox" id="inc-photos" checked /><span>Photos</span></label>
+      <label class="check-item"><input type="checkbox" id="use-pexels" checked /><span>Pexels</span></label>
+      <label class="check-item"><input type="checkbox" id="use-pixabay" checked /><span>Pixabay</span></label>
+    </div>
+  </div>
+
+  <button class="btn-run" id="run-btn" onclick="runScraper()">Run Scraper</button>
+
+  <div class="status-wrap">
+    <div class="status" id="status">Paste your script and hit Run.</div>
+    <div class="progress-outer"><div class="progress-inner" id="progress"></div></div>
+  </div>
+
+  <div id="kw-section" class="kw-section" style="display:none">
+    <div class="section-label" style="margin-top:0;">Extracted Keywords</div>
+    <div class="kw-pills" id="kw-pills"></div>
+  </div>
+
+  <div id="stats" class="stats" style="display:none"></div>
+  <div id="table-wrap"></div>
+  <div id="dl-wrap"></div>
+
+</div>
+
+<script>
+let allResults = [];
+
+function setStatus(msg, type) {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = 'status' + (type ? ' ' + type : '');
+}
+
+function setProgress(pct) {
+  document.getElementById('progress').style.width = pct + '%';
+}
+
+async function extractKeywordsAI(script, maxKw, apiKey) {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 800,
+      messages: [{
+        role: 'user',
+        content: `You are a video producer for a faceless YouTube channel. Analyze this script and extract ${maxKw} specific visual search keywords to find matching stock footage and photos.
+
+Rules:
+- Each keyword must describe something a camera would actually capture on screen
+- 2–4 words max per keyword
+- Specific and vivid — not "people" but "crowd city plaza"
+- Cover different visual moments/scenes across the script
+- Optimized for stock footage search engines
+
+Return ONLY a valid JSON array of strings. No explanation, no markdown, no backticks.
+Example: ["ancient ruins aerial", "scientist laboratory night", "stock market trading floor"]
+
+Script:
+${script}`
+      }]
+    })
+  });
+  if (!res.ok) throw new Error(`Claude API error: ${res.status}`);
+  const data = await res.json();
+  return JSON.parse(data.content[0].text.trim());
+}
+
+function extractKeywordsFallback(script, maxKw) {
+  // Smart fallback: extract noun phrases and visual scene descriptors
+  const sentences = script.split(/[.!?\n]+/).filter(s => s.trim().length > 20);
+  const stopwords = new Set(['the','a','an','and','or','but','in','on','at','to','for','of','with','by','from','as','is','was','are','were','be','been','being','have','has','had','do','does','did','will','would','could','should','may','might','that','this','these','those','their','there','then','when','what','which','who','how','just','also','more','very','still','even','back','way','first','last','long','little','own','other','old','right','big','high','small','large','next','early','young','important','few','public','bad','same','able']);
+  const keywords = new Set();
+  const patterns = [
+    /\b(\w+ (?:city|street|crowd|building|court|police|night|day|market|office|lab|forest|ocean|mountain|sky|fire|water|war|protest|stage|arena|hospital|school|prison|bank|church|government|military|factory|farm|highway|bridge|airport|museum|library))\b/gi,
+    /\b((?:ancient|modern|dark|bright|crowded|empty|burning|frozen|massive|tiny|secret|hidden|underwater|aerial|dramatic) \w+)\b/gi,
+    /\b(\w+ (?:gathering|explosion|collapse|ceremony|battle|celebration|funeral|march|debate|experiment|discovery))\b/gi
+  ];
+  for (const pat of patterns) {
+    let m;
+    while ((m = pat.exec(script)) !== null) {
+      const kw = m[1].toLowerCase().trim();
+      if (kw.split(' ').every(w => !stopwords.has(w))) keywords.add(kw);
+    }
+  }
+  // Also grab 2-word combos of nouns from sentences
+  for (const s of sentences.slice(0, 10)) {
+    const words = s.split(/\s+/).filter(w => w.length > 4 && !stopwords.has(w.toLowerCase()) && /^[a-zA-Z]+$/.test(w));
+    for (let i = 0; i < words.length - 1; i++) {
+      keywords.add(`${words[i].toLowerCase()} ${words[i+1].toLowerCase()}`);
+    }
+  }
+  return [...keywords].slice(0, maxKw);
+}
+
+async function searchPexelsVideos(kw, key, n) {
+  const r = await fetch(`https://api.pexels.com/videos/search?query=${encodeURIComponent(kw)}&per_page=${n}&orientation=landscape`, { headers: { Authorization: key } });
+  if (!r.ok) return [];
+  const d = await r.json();
+  return (d.videos || []).map(v => {
+    const files = (v.video_files || []).sort((a,b) => (b.width||0)-(a.width||0));
+    return { keyword:kw, type:'Video', source:'Pexels', title:`Pexels #${v.id}`, photographer:v.user?.name||'', duration:v.duration?`${v.duration}s`:'—', resolution:`${v.width}x${v.height}`, license:'Free – Pexels License', preview:v.image||'', download:files[0]?.link||'', page:v.url||'' };
+  });
+}
+
+async function searchPexelsPhotos(kw, key, n) {
+  const r = await fetch(`https://api.pexels.com/v1/search?query=${encodeURIComponent(kw)}&per_page=${n}&orientation=landscape`, { headers: { Authorization: key } });
+  if (!r.ok) return [];
+  const d = await r.json();
+  return (d.photos || []).map(p => ({ keyword:kw, type:'Photo', source:'Pexels', title:p.alt||`Pexels #${p.id}`, photographer:p.photographer||'', duration:'—', resolution:`${p.width}x${p.height}`, license:'Free – Pexels License', preview:p.src?.medium||'', download:p.src?.original||'', page:p.url||'' }));
+}
+
+async function searchPixabayVideos(kw, key, n) {
+  const r = await fetch(`https://pixabay.com/api/videos/?key=${key}&q=${encodeURIComponent(kw)}&per_page=${n}&safesearch=true`);
+  if (!r.ok) return [];
+  const d = await r.json();
+  return (d.hits || []).map(v => {
+    const best = v.videos?.large || v.videos?.medium || {};
+    return { keyword:kw, type:'Video', source:'Pixabay', title:`Pixabay #${v.id}`, photographer:v.user||'', duration:v.duration?`${v.duration}s`:'—', resolution:`${best.width||''}x${best.height||''}`, license:'Free – Pixabay License', preview:`https://i.vimeocdn.com/video/${v.picture_id}_295x166.jpg`, download:best.url||'', page:v.pageURL||'' };
+  });
+}
+
+async function searchPixabayPhotos(kw, key, n) {
+  const r = await fetch(`https://pixabay.com/api/?key=${key}&q=${encodeURIComponent(kw)}&per_page=${n}&safesearch=true&orientation=horizontal`);
+  if (!r.ok) return [];
+  const d = await r.json();
+  return (d.hits || []).map(p => ({ keyword:kw, type:'Photo', source:'Pixabay', title:`Pixabay #${p.id}`, photographer:p.user||'', duration:'—', resolution:`${p.imageWidth}x${p.imageHeight}`, license:'Free – Pixabay License', preview:p.previewURL||'', download:p.largeImageURL||'', page:p.pageURL||'' }));
+}
+
+function renderKeywords(kws) {
+  document.getElementById('kw-section').style.display = 'block';
+  document.getElementById('kw-pills').innerHTML = kws.map(k => `<span class="kw-pill">${k}</span>`).join('');
+}
+
+function renderStats(results) {
+  const videos = results.filter(r => r.type==='Video').length;
+  const photos = results.filter(r => r.type==='Photo').length;
+  const pexels = results.filter(r => r.source==='Pexels').length;
+  const pixabay = results.filter(r => r.source==='Pixabay').length;
+  const el = document.getElementById('stats');
+  el.style.display = 'grid';
+  el.className = 'stats fade-in';
+  el.innerHTML = `
+    <div class="stat"><div class="stat-n">${results.length}</div><div class="stat-l">Total Results</div></div>
+    <div class="stat"><div class="stat-n">${videos}</div><div class="stat-l">Videos</div></div>
+    <div class="stat"><div class="stat-n">${photos}</div><div class="stat-l">Photos</div></div>
+    <div class="stat"><div class="stat-n">${pexels}/${pixabay}</div><div class="stat-l">Pexels / Pixabay</div></div>
+  `;
+}
+
+function renderTable(results) {
+  const incVideos = document.getElementById('inc-videos').checked;
+  const incPhotos = document.getElementById('inc-photos').checked;
+  const filtered = results.filter(r => (r.type==='Video'&&incVideos)||(r.type==='Photo'&&incPhotos));
+  if (!filtered.length) return;
+  const rows = filtered.map(r => `
+    <tr>
+      <td><img class="thumb" src="${r.preview}" alt="" onerror="this.style.display='none'" /></td>
+      <td>${r.keyword}</td>
+      <td><span class="badge ${r.type==='Video'?'b-video':'b-photo'}">${r.type}</span></td>
+      <td><span class="badge ${r.source==='Pexels'?'b-px':'b-pb'}">${r.source}</span></td>
+      <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.title}</td>
+      <td style="color:#888">${r.photographer}</td>
+      <td style="color:#888">${r.duration}</td>
+      <td style="color:#888">${r.resolution}</td>
+      <td>${r.page ? `<a href="${r.page}" target="_blank">view ↗</a>` : '—'}</td>
+      <td>${r.download ? `<a href="${r.download}" target="_blank">download ↗</a>` : '—'}</td>
+    </tr>
+  `).join('');
+  document.getElementById('table-wrap').innerHTML = `
+    <div class="table-wrap fade-in">
+      <table>
+        <thead><tr>
+          <th>preview</th><th>keyword</th><th>type</th><th>source</th>
+          <th>title</th><th>creator</th><th>duration</th><th>resolution</th>
+          <th>page</th><th>download</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function buildCSV(results) {
+  const headers = ['keyword','type','source','title','photographer','duration','resolution','license','preview_url','download_url','page_url'];
+  const rows = results.map(r =>
+    [r.keyword,r.type,r.source,r.title,r.photographer,r.duration,r.resolution,r.license,r.preview,r.download,r.page]
+    .map(v => `"${(v||'').replace(/"/g,'""')}"`)
+    .join(',')
+  );
+  return [headers.join(','), ...rows].join('\n');
+}
+
+function buildSummary(results, keywords) {
+  const videos = results.filter(r=>r.type==='Video');
+  const photos = results.filter(r=>r.type==='Photo');
+  const pexels = results.filter(r=>r.source==='Pexels');
+  const pixabay = results.filter(r=>r.source==='Pixabay');
+  const kwGroups = {};
+  for (const r of results) {
+    if (!kwGroups[r.keyword]) kwGroups[r.keyword] = [];
+    kwGroups[r.keyword].push(r);
+  }
+  const date = new Date().toLocaleString();
+  let txt = `THE Finder — STOCK FOOTAGE SCRAPE REPORT\n`;
+  txt += `Generated: ${date}\n`;
+  txt += `${'='.repeat(50)}\n\n`;
+  txt += `SUMMARY\n-------\n`;
+  txt += `Total results : ${results.length}\n`;
+  txt += `Videos        : ${videos.length}\n`;
+  txt += `Photos        : ${photos.length}\n`;
+  txt += `Pexels        : ${pexels.length}\n`;
+  txt += `Pixabay       : ${pixabay.length}\n\n`;
+  txt += `KEYWORDS USED (${keywords.length})\n${'─'.repeat(30)}\n`;
+  keywords.forEach((kw,i) => {
+    const g = kwGroups[kw] || [];
+    txt += `${String(i+1).padStart(2,'0')}. ${kw} — ${g.length} results\n`;
+  });
+  txt += `\nRESULTS BY KEYWORD\n${'─'.repeat(30)}\n`;
+  for (const [kw, items] of Object.entries(kwGroups)) {
+    txt += `\n[ ${kw.toUpperCase()} ]\n`;
+    items.forEach(r => {
+      txt += `  ${r.type} | ${r.source} | ${r.title}\n`;
+      txt += `  Page    : ${r.page}\n`;
+      txt += `  Download: ${r.download}\n`;
+    });
+  }
+  return txt;
+}
+
+async function downloadZip() {
+  if (!allResults.length) return;
+  const btn = document.getElementById('dl-btn');
+  btn.disabled = true;
+  btn.textContent = 'Building ZIP...';
+
+  const JSZip = window.JSZip;
+  const zip = new JSZip();
+  const folder = zip.folder('Finder_stock_footage');
+
+  // CSV
+  folder.file('results.csv', buildCSV(allResults));
+
+  // JSON
+  folder.file('results.json', JSON.stringify(allResults, null, 2));
+
+  // Summary txt
+  const kws = [...new Set(allResults.map(r=>r.keyword))];
+  folder.file('summary.txt', buildSummary(allResults, kws));
+
+  // Per-keyword CSVs in subfolder
+  const byKw = zip.folder('Finder_stock_footage/by_keyword');
+  const groups = {};
+  for (const r of allResults) {
+    if (!groups[r.keyword]) groups[r.keyword] = [];
+    groups[r.keyword].push(r);
+  }
+  for (const [kw, items] of Object.entries(groups)) {
+    const safeName = kw.replace(/[^a-z0-9]+/gi,'_').toLowerCase();
+    byKw.file(`${safeName}.csv`, buildCSV(items));
+  }
+
+  const blob = await zip.generateAsync({type:'blob', compression:'DEFLATE'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'Finder_stock_footage.zip';
+  a.click();
+
+  btn.disabled = false;
+  btn.textContent = 'Download ZIP (CSV + JSON + Summary)';
+}
+
+async function runScraper() {
+  const script = document.getElementById('script').value.trim();
+  const pexelsKey = document.getElementById('pexels-key').value.trim();
+  const pixabayKey = document.getElementById('pixabay-key').value.trim();
+  const claudeKey = document.getElementById('claude-key').value.trim();
+  const perKw = parseInt(document.getElementById('per-kw').value) || 3;
+  const maxKw = parseInt(document.getElementById('max-kw').value) || 10;
+  const usePexels = document.getElementById('use-pexels').checked;
+  const usePixabay = document.getElementById('use-pixabay').checked;
+
+  if (!script) { setStatus('Please paste your script first.', 'err'); return; }
+  if (!pexelsKey && !pixabayKey) { setStatus('At least one API key is required.', 'err'); return; }
+
+  const btn = document.getElementById('run-btn');
+  btn.disabled = true;
+  document.getElementById('kw-section').style.display = 'none';
+  document.getElementById('stats').style.display = 'none';
+  document.getElementById('table-wrap').innerHTML = '';
+  document.getElementById('dl-wrap').innerHTML = '';
+  allResults = [];
+  setProgress(0);
+
+  try {
+    let keywords;
+    if (claudeKey) {
+      setStatus('Analyzing script with Claude AI...');
+      keywords = await extractKeywordsAI(script, maxKw, claudeKey);
+    } else {
+      setStatus('Extracting visual keywords from script...');
+      keywords = extractKeywordsFallback(script, maxKw);
+    }
+
+    renderKeywords(keywords);
+    setProgress(10);
+
+    for (let i = 0; i < keywords.length; i++) {
+      const kw = keywords[i];
+      setStatus(`Searching (${i+1}/${keywords.length}): "${kw}"...`);
+      const tasks = [];
+      if (usePexels && pexelsKey) {
+        tasks.push(searchPexelsVideos(kw, pexelsKey, perKw).catch(()=>[]));
+        tasks.push(searchPexelsPhotos(kw, pexelsKey, perKw).catch(()=>[]));
+      }
+      if (usePixabay && pixabayKey) {
+        tasks.push(searchPixabayVideos(kw, pixabayKey, perKw).catch(()=>[]));
+        tasks.push(searchPixabayPhotos(kw, pixabayKey, perKw).catch(()=>[]));
+      }
+      const batches = await Promise.all(tasks);
+      batches.forEach(b => allResults.push(...b));
+      setProgress(10 + Math.round(((i+1)/keywords.length)*85));
+    }
+
+    renderStats(allResults);
+    renderTable(allResults);
+    setProgress(100);
+    setStatus(`Done — ${allResults.length} results found across ${keywords.length} keywords.`, 'ok');
+
+    document.getElementById('dl-wrap').innerHTML = `<button class="btn-dl" id="dl-btn" onclick="downloadZip()">Download ZIP (CSV + JSON + Summary)</button>`;
+  } catch(e) {
+    setStatus('Error: ' + e.message, 'err');
+    console.error(e);
+  }
+  btn.disabled = false;
+}
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+</body>
+</html>
