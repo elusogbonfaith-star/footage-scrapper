@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>The Vault — Stock Footage Scraper</title>
+<title>The Finder — Stock Footage Scraper</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
 <style>
   :root {
@@ -88,7 +88,7 @@
 <div class="wrap">
   <div class="logo-row">
     <div class="logo-icon"><span>V</span></div>
-    <h1>The <em>Vault</em></h1>
+    <h1>The <em>Finder</em></h1>
   </div>
   <p class="tagline">Stock Footage &amp; Photo Scraper — Powered by OpenRouter AI</p>
 
@@ -204,7 +204,7 @@ async function callOpenRouter(prompt, apiKey, model) {
       'Content-Type': 'application/json',
       'Authorization': 'Bearer ' + apiKey,
       'HTTP-Referer': window.location.href,
-      'X-Title': 'The Vault Scraper'
+      'X-Title': 'The Finder Scraper'
     },
     body: JSON.stringify({
       model: model,
@@ -377,7 +377,7 @@ function buildCSV() {
 
 function buildSummary() {
   const date = new Date().toLocaleString();
-  let txt = `THE VAULT — STOCK FOOTAGE SCRAPE REPORT\nGenerated: ${date}\n${'='.repeat(55)}\n\n`;
+  let txt = `THE Finder — STOCK FOOTAGE SCRAPE REPORT\nGenerated: ${date}\n${'='.repeat(55)}\n\n`;
   txt += `OVERVIEW\n--------\nTotal results   : ${allResults.length}\nScenes analysed : ${allScenes.length}\nVideos          : ${allResults.filter(r=>r.type==='Video').length}\nPhotos          : ${allResults.filter(r=>r.type==='Photo').length}\n\n`;
   txt += `SCENE-BY-SCENE BREAKDOWN\n${'─'.repeat(55)}\n`;
   allScenes.forEach((scene, i) => {
@@ -425,7 +425,7 @@ async function downloadZip(includeMedia) {
   const firstOnly = document.getElementById('dl-first-only')?.checked ?? true;
 
   const zip = new JSZip();
-  const folder = zip.folder('vault_stock_footage');
+  const folder = zip.folder('Finder_stock_footage');
 
   // Always include data files
   folder.file('results.csv', buildCSV());
@@ -433,7 +433,7 @@ async function downloadZip(includeMedia) {
   folder.file('summary.txt', buildSummary());
 
   // Build per-scene CSV folder
-  const byScene = zip.folder('vault_stock_footage/by_scene');
+  const byScene = zip.folder('Finder_stock_footage/by_scene');
   allScenes.forEach((scene, i) => {
     if (!scene.results.length) return;
     const name = `scene_${String(i+1).padStart(3,'0')}_${scene.keyword.replace(/[^a-z0-9]+/gi,'_').toLowerCase().slice(0,30)}.csv`;
@@ -473,8 +473,8 @@ async function downloadZip(includeMedia) {
       });
     });
 
-    const videosFolder = zip.folder('vault_stock_footage/videos');
-    const photosFolder = zip.folder('vault_stock_footage/photos');
+    const videosFolder = zip.folder('Finder_stock_footage/videos');
+    const photosFolder = zip.folder('Finder_stock_footage/photos');
     let done = 0;
     let failed = 0;
 
@@ -505,7 +505,7 @@ async function downloadZip(includeMedia) {
 
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = includeMedia ? 'vault_stock_footage_with_media.zip' : 'vault_stock_footage_links.zip';
+  a.download = includeMedia ? 'Finder_stock_footage_with_media.zip' : 'Finder_stock_footage_links.zip';
   a.click();
 
   setDlStatus('Done! ZIP saved to your Downloads folder.', 100);
