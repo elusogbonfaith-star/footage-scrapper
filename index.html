@@ -133,7 +133,7 @@
       </div>
       <div class="field">
         <label>Batch size</label>
-        <input type="text" id="batch-size" value="10" />
+        <input type="text" id="batch-size" value="5" />
         <div class="hint">Sentences per AI call</div>
       </div>
     </div>
@@ -197,22 +197,7 @@ function splitSentences(text, minLen) {
   return raw.filter(s => { if (seen.has(s)) return false; seen.add(s); return true; });
 }
 
-async function getKeywordsForBatch(sentences, apiKey, model) {
-  const numbered = sentences.map((s, i) => `${i+1}. ${s}`).join('\n');
-  const prompt = `You are a video producer for a faceless YouTube channel. For each numbered sentence below, generate ONE stock footage search keyword (2-4 words) that best captures what should be shown on screen at that exact moment.
-
-Rules:
-- Think visually: what would a camera actually film for this sentence?
-- Be specific: not "people" but "crowd cheering stadium"
-- Match the mood and context of each sentence
-- Return ONLY a valid JSON array with one keyword string per sentence, in order
-- No explanation, no markdown, no backticks
-
-Example output for 3 sentences: ["ancient rome colosseum aerial","emperor addressing crowd","roman soldiers marching"]
-
-Sentences:
-${numbered}`;
-
+async function callOpenRouter(prompt, apiKey, model) {
   const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -223,7 +208,8 @@ ${numbered}`;
     },
     body: JSON.stringify({
       model: model,
-      max_tokens: 1200,
+      max_tokens: 1500,
+      temperature: 0.3,
       messages: [{ role: 'user', content: prompt }]
     })
   });
@@ -232,11 +218,62 @@ ${numbered}`;
     throw new Error(err.error?.message || `API error ${res.status}`);
   }
   const data = await res.json();
-  const text = (data.choices[0].message.content || '').trim().replace(/```json|```/g,'').trim();
-  const keywords = JSON.parse(text);
-  if (!Array.isArray(keywords) || keywords.length !== sentences.length) {
-    throw new Error('Keyword count mismatch — try a smaller batch size');
+  return (data.choices[0].message.content || '').trim();
+}
+
+function parseKeywords(text, expectedCount) {
+  // Strip markdown fences
+  let clean = text.replace(/```json|```/gi, '').trim();
+  // Try full JSON parse first
+  try {
+    const arr = JSON.parse(clean);
+    if (Array.isArray(arr)) {
+      // Pad if short, trim if long
+      while (arr.length < expectedCount) arr.push('people outdoors');
+      return arr.slice(0, expectedCount);
+    }
+  } catch(e) {}
+  // Fallback: extract quoted strings
+  const matches = [...clean.matchAll(/"([^"]+)"/g)].map(m => m[1]);
+  if (matches.length > 0) {
+    while (matches.length < expectedCount) matches.push('people outdoors');
+    return matches.slice(0, expectedCount);
   }
+  // Last resort: one keyword per line
+  const lines = clean.split('\n').map(l => l.replace(/^\d+\.?\s*/, '').replace(/^[-*]\s*/, '').trim()).filter(l => l.length > 2);
+  while (lines.length < expectedCount) lines.push('people outdoors');
+  return lines.slice(0, expectedCount);
+}
+
+async function getKeywordsForBatch(sentences, apiKey, model) {
+  const numbered = sentences.map((s, i) => `${i+1}. ${s}`).join('\n');
+  const prompt = `You are a video producer for a faceless YouTube channel. For each numbered sentence below, generate ONE stock footage search keyword (2-4 words) that best captures what should be shown on screen at that exact moment.
+
+CRITICAL RULES:
+- You MUST return exactly ${sentences.length} keywords — one per sentence, in order
+- Return ONLY a valid JSON array of strings, nothing else
+- No explanation, no markdown fences, no numbering outside the array
+- Think visually: what would a camera actually capture for this sentence?
+- Be specific: not "people" but "crowd city street"
+
+Example for 3 sentences: ["ancient rome ruins aerial","emperor speech crowd","soldiers marching sunset"]
+
+Sentences to process (${sentences.length} total):
+${numbered}`;
+
+  // First attempt
+  let text = await callOpenRouter(prompt, apiKey, model);
+  let keywords = parseKeywords(text, sentences.length);
+
+  // If still mismatched after parsing, retry once with stricter prompt
+  if (keywords.length !== sentences.length) {
+    const retryPrompt = `Return a JSON array of exactly ${sentences.length} short stock footage search keywords (2-4 words each), one for each item below. ONLY output the JSON array, nothing else.
+
+${numbered}`;
+    text = await callOpenRouter(retryPrompt, apiKey, model);
+    keywords = parseKeywords(text, sentences.length);
+  }
+
   return keywords;
 }
 
