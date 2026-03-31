@@ -391,14 +391,48 @@ function buildSummary() {
   return txt;
 }
 
-async function downloadZip() {
-  const btn = document.getElementById('dl-btn');
-  btn.disabled = true; btn.textContent = 'Building ZIP...';
+function setDlStatus(msg, pct) {
+  const el = document.getElementById('dl-status');
+  const bar = document.getElementById('dl-progress');
+  if (el) el.textContent = msg;
+  if (bar && pct !== undefined) bar.style.width = Math.min(100, pct) + '%';
+}
+
+function getFileExt(url, type) {
+  try {
+    const path = new URL(url).pathname;
+    const ext = path.split('.').pop().split('?')[0].toLowerCase();
+    if (['mp4','mov','webm','avi'].includes(ext)) return ext;
+    if (['jpg','jpeg','png','webp','gif'].includes(ext)) return ext;
+  } catch(e) {}
+  return type === 'Video' ? 'mp4' : 'jpg';
+}
+
+async function fetchMediaBlob(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return await res.blob();
+}
+
+async function downloadZip(includeMedia) {
+  const dlBtn = document.getElementById('dl-btn');
+  const linksBtn = document.getElementById('dl-links-btn');
+  if (dlBtn) { dlBtn.disabled = true; dlBtn.textContent = 'Downloading...'; }
+  if (linksBtn) linksBtn.disabled = true;
+
+  const dlVideos = document.getElementById('dl-videos')?.checked ?? true;
+  const dlPhotos = document.getElementById('dl-photos')?.checked ?? true;
+  const firstOnly = document.getElementById('dl-first-only')?.checked ?? true;
+
   const zip = new JSZip();
   const folder = zip.folder('vault_stock_footage');
+
+  // Always include data files
   folder.file('results.csv', buildCSV());
   folder.file('results.json', JSON.stringify(allScenes, null, 2));
   folder.file('summary.txt', buildSummary());
+
+  // Build per-scene CSV folder
   const byScene = zip.folder('vault_stock_footage/by_scene');
   allScenes.forEach((scene, i) => {
     if (!scene.results.length) return;
@@ -411,13 +445,72 @@ async function downloadZip() {
     );
     byScene.file(name, [headers.join(','),...rows].join('\n'));
   });
-  const blob = await zip.generateAsync({type:'blob', compression:'DEFLATE'});
+
+  if (includeMedia) {
+    // Collect media items to download
+    const mediaItems = [];
+    allScenes.forEach((scene, sceneIdx) => {
+      const safeName = `scene_${String(sceneIdx+1).padStart(3,'0')}_${scene.keyword.replace(/[^a-z0-9]+/gi,'_').toLowerCase().slice(0,25)}`;
+      let results = scene.results;
+
+      // Filter by type
+      results = results.filter(r =>
+        (r.type === 'Video' && dlVideos) || (r.type === 'Photo' && dlPhotos)
+      );
+
+      // Best match only = first video + first photo per scene
+      if (firstOnly) {
+        const firstVid = results.find(r => r.type === 'Video');
+        const firstPic = results.find(r => r.type === 'Photo');
+        results = [firstVid, firstPic].filter(Boolean);
+      }
+
+      results.forEach((r, ri) => {
+        if (!r.download) return;
+        const ext = getFileExt(r.download, r.type);
+        const filename = `${safeName}_${r.type.toLowerCase()}_${ri+1}.${ext}`;
+        mediaItems.push({ r, filename, sceneName: safeName });
+      });
+    });
+
+    const videosFolder = zip.folder('vault_stock_footage/videos');
+    const photosFolder = zip.folder('vault_stock_footage/photos');
+    let done = 0;
+    let failed = 0;
+
+    for (const item of mediaItems) {
+      setDlStatus(
+        `Downloading ${done+1}/${mediaItems.length}: ${item.filename} ...`,
+        Math.round((done / mediaItems.length) * 90)
+      );
+      try {
+        const blob = await fetchMediaBlob(item.r.download);
+        const targetFolder = item.r.type === 'Video' ? videosFolder : photosFolder;
+        targetFolder.file(item.filename, blob);
+      } catch(e) {
+        failed++;
+        console.warn('Failed to fetch:', item.r.download, e.message);
+      }
+      done++;
+    }
+
+    setDlStatus(`All media fetched (${failed} failed). Compressing ZIP...`, 92);
+  }
+
+  setDlStatus('Compressing and saving ZIP file...', 95);
+  const blob = await zip.generateAsync(
+    { type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 3 } },
+    (meta) => setDlStatus(`Compressing: ${Math.round(meta.percent)}%...`, meta.percent * 0.05 + 95)
+  );
+
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'vault_stock_footage.zip';
+  a.download = includeMedia ? 'vault_stock_footage_with_media.zip' : 'vault_stock_footage_links.zip';
   a.click();
-  btn.disabled = false;
-  btn.textContent = 'Download ZIP';
+
+  setDlStatus('Done! ZIP saved to your Downloads folder.', 100);
+  if (dlBtn) { dlBtn.disabled = false; dlBtn.textContent = 'Download ZIP with Media Files'; }
+  if (linksBtn) linksBtn.disabled = false;
 }
 
 async function runScraper() {
@@ -493,7 +586,33 @@ async function runScraper() {
     renderStats();
     setProgress(100);
     setStatus(`Done — ${allResults.length} results found across ${sentences.length} scenes.`, 'ok');
-    document.getElementById('dl-wrap').innerHTML = `<button class="btn-dl" id="dl-btn" onclick="downloadZip()">Download ZIP (CSV + JSON + per-scene files)</button>`;
+    document.getElementById('dl-wrap').innerHTML = `
+  <div style="margin-top:20px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:16px;">
+    <div style="font-size:10px;letter-spacing:0.15em;text-transform:uppercase;color:var(--gold-dim);margin-bottom:12px;">Download Options</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-muted);cursor:pointer;">
+        <input type="checkbox" id="dl-videos" checked style="accent-color:var(--gold);" /> Videos
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-muted);cursor:pointer;">
+        <input type="checkbox" id="dl-photos" checked style="accent-color:var(--gold);" /> Photos
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-muted);cursor:pointer;">
+        <input type="checkbox" id="dl-first-only" checked style="accent-color:var(--gold);" /> Best match only per scene
+      </label>
+    </div>
+    <div style="font-size:11px;color:var(--text-dim);margin-bottom:14px;">
+      Videos may be large (50–200MB each). The ZIP will be built in your browser — do not close the tab while downloading.
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <button class="btn-dl" id="dl-btn" onclick="downloadZip(true)">Download ZIP with Media Files</button>
+      <button class="btn-dl" id="dl-links-btn" onclick="downloadZip(false)">Download ZIP (Links Only)</button>
+    </div>
+    <div id="dl-status" style="margin-top:12px;font-size:12px;font-family:'DM Mono',monospace;color:var(--text-muted);min-height:18px;"></div>
+    <div style="height:2px;background:var(--border);margin-top:8px;border-radius:1px;overflow:hidden;">
+      <div id="dl-progress" style="height:100%;background:var(--gold);width:0%;transition:width 0.3s ease;"></div>
+    </div>
+  </div>
+`;
 
   } catch(e) {
     setStatus('Error: ' + e.message, 'err');
