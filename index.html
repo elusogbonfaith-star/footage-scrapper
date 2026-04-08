@@ -57,19 +57,32 @@
 
   /* Scene cards */
   .scenes-wrap { margin-top: 28px; }
-  .scene-card { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; margin-bottom: 16px; overflow: hidden; }
+  .scene-card { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; margin-bottom: 20px; overflow: hidden; }
   .scene-head { padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; gap: 12px; }
   .scene-num { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--gold); min-width: 28px; padding-top: 1px; }
   .scene-text { font-size: 13px; color: var(--text-muted); line-height: 1.6; flex: 1; }
   .scene-kw { font-size: 11px; color: var(--gold-dim); font-family: 'DM Mono', monospace; margin-top: 4px; }
-  .scene-results { padding: 10px 16px; display: flex; flex-wrap: wrap; gap: 8px; }
-  .result-pill { display: flex; align-items: center; gap: 6px; background: var(--surface2); border: 1px solid var(--border); border-radius: 3px; padding: 5px 10px; font-size: 11px; text-decoration: none; color: var(--text-muted); transition: border-color 0.15s; }
-  .result-pill:hover { border-color: var(--gold); color: var(--text); }
-  .result-pill img { width: 36px; height: 24px; object-fit: cover; border-radius: 2px; background: var(--border); }
-  .pill-type { font-family: 'DM Mono', monospace; font-size: 10px; }
-  .pill-v { color: var(--gold); }
-  .pill-p { color: #81c784; }
+  .scene-results { padding: 12px 16px; display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+  .media-card { position: relative; border-radius: 4px; overflow: hidden; border: 2px solid transparent; cursor: pointer; transition: border-color 0.15s; background: var(--surface2); }
+  .media-card:hover { border-color: var(--gold-dim); }
+  .media-card.selected { border-color: var(--gold); }
+  .media-card img { width: 100%; height: 100px; object-fit: cover; display: block; background: var(--border); }
+  .media-card .no-thumb { width: 100%; height: 100px; display: flex; align-items: center; justify-content: center; font-size: 28px; background: var(--surface2); }
+  .media-card .card-info { padding: 6px 8px; }
+  .media-card .card-type { font-size: 10px; font-family: 'DM Mono', monospace; margin-bottom: 2px; }
+  .media-card .card-title { font-size: 10px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .media-card .card-check { position: absolute; top: 6px; right: 6px; width: 20px; height: 20px; border-radius: 50%; background: var(--gold); display: none; align-items: center; justify-content: center; font-size: 12px; color: #000; font-weight: bold; }
+  .media-card.selected .card-check { display: flex; }
+  .media-card .card-actions { position: absolute; bottom: 0; left: 0; right: 0; display: flex; gap: 0; opacity: 0; transition: opacity 0.15s; }
+  .media-card:hover .card-actions { opacity: 1; }
+  .card-btn { flex: 1; padding: 5px 0; font-size: 10px; font-family: 'DM Mono', monospace; text-align: center; cursor: pointer; border: none; letter-spacing: 0.05em; }
+  .card-btn-dl { background: var(--gold); color: #000; }
+  .card-btn-view { background: rgba(0,0,0,0.7); color: var(--text-muted); text-decoration: none; display: flex; align-items: center; justify-content: center; }
+  .card-btn-dl:hover { background: #e0b84a; }
   .no-results { font-size: 12px; color: var(--text-dim); font-style: italic; padding: 8px 0; }
+  .scene-sel-bar { padding: 6px 16px; background: var(--surface2); border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: var(--text-dim); }
+  .scene-sel-bar button { font-size: 10px; padding: 3px 10px; background: transparent; border: 1px solid var(--border); color: var(--text-muted); border-radius: 3px; cursor: pointer; font-family: 'DM Mono', monospace; }
+  .scene-sel-bar button:hover { border-color: var(--gold); color: var(--gold); }
 
   /* Stats */
   .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 24px; }
@@ -319,19 +332,103 @@ async function searchPixabayPhotos(kw, key, n) {
   } catch { return []; }
 }
 
+// Track selected items globally: key = 'sceneIdx-resultIdx'
+const selectedItems = new Set();
+
+function getFileExt(url, type) {
+  try {
+    const path = new URL(url).pathname;
+    const ext = path.split('.').pop().split('?')[0].toLowerCase();
+    if (['mp4','mov','webm','avi'].includes(ext)) return ext;
+    if (['jpg','jpeg','png','webp','gif'].includes(ext)) return ext;
+  } catch(e) {}
+  return type === 'Video' ? 'mp4' : 'jpg';
+}
+
+function toggleSelect(key, cardEl) {
+  if (selectedItems.has(key)) {
+    selectedItems.delete(key);
+    cardEl.classList.remove('selected');
+  } else {
+    selectedItems.add(key);
+    cardEl.classList.add('selected');
+  }
+  updateSelectionCount();
+}
+
+function updateSelectionCount() {
+  const el = document.getElementById('sel-count');
+  if (el) el.textContent = selectedItems.size + ' selected';
+  const btn = document.getElementById('dl-selected-btn');
+  if (btn) btn.disabled = selectedItems.size === 0;
+}
+
+function selectAllInScene(sceneIdx, filtered) {
+  filtered.forEach((_, ri) => selectedItems.add(`${sceneIdx}-${ri}`));
+  document.querySelectorAll(`[data-scene="${sceneIdx}"]`).forEach(el => el.classList.add('selected'));
+  updateSelectionCount();
+}
+
+function clearScene(sceneIdx, filtered) {
+  filtered.forEach((_, ri) => selectedItems.delete(`${sceneIdx}-${ri}`));
+  document.querySelectorAll(`[data-scene="${sceneIdx}"]`).forEach(el => el.classList.remove('selected'));
+  updateSelectionCount();
+}
+
+async function downloadSingle(url, filename) {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('fetch failed');
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); document.body.removeChild(a); }, 500);
+  } catch(e) {
+    // fallback — open in new tab
+    window.open(url, '_blank');
+  }
+}
+
 function renderScene(scene, index) {
   const incVideos = document.getElementById('inc-videos').checked;
   const incPhotos = document.getElementById('inc-photos').checked;
   const filtered = scene.results.filter(r => (r.type==='Video'&&incVideos)||(r.type==='Photo'&&incPhotos));
+  const safe = `scene_${String(index+1).padStart(3,'0')}_${scene.keyword.replace(/[^a-z0-9]+/gi,'_').toLowerCase().slice(0,25)}`;
 
-  const pills = filtered.length
-    ? filtered.map(r => `
-        <a class="result-pill" href="${r.page}" target="_blank">
-          <img src="${r.preview}" alt="" onerror="this.style.display='none'" />
-          <span class="pill-type ${r.type==='Video'?'pill-v':'pill-p'}">${r.type==='Video'?'▶':'◼'}</span>
-          <span>${r.source} · ${r.title}</span>
-        </a>`).join('')
-    : `<span class="no-results">No results found for this sentence</span>`;
+  const cards = filtered.length ? filtered.map((r, ri) => {
+    const key = `${index}-${ri}`;
+    const ext = getFileExt(r.download, r.type);
+    const fname = `${safe}_${r.type.toLowerCase()}_${ri+1}.${ext}`;
+    const isVid = r.type === 'Video';
+    const thumbHtml = r.preview
+      ? `<img src="${r.preview}" alt="" onerror="this.parentElement.innerHTML='<div class=\"no-thumb\">${isVid ? '▶' : '◼'}</div>'" />`
+      : `<div class="no-thumb">${isVid ? '▶' : '◼'}</div>`;
+    return `
+      <div class="media-card" data-scene="${index}" data-key="${key}" onclick="toggleSelect('${key}', this)">
+        ${thumbHtml}
+        <div class="card-check">✓</div>
+        <div class="card-info">
+          <div class="card-type" style="color:${isVid ? 'var(--gold)' : '#81c784'}">${isVid ? '▶ Video' : '◼ Photo'} · ${r.source}</div>
+          <div class="card-title">${r.title}</div>
+        </div>
+        <div class="card-actions">
+          <button class="card-btn card-btn-dl" onclick="event.stopPropagation(); downloadSingle('${r.download}','${fname}')" title="Download this file">↓ Save</button>
+          <a class="card-btn card-btn-view" href="${r.page}" target="_blank" onclick="event.stopPropagation()" title="View on source site">↗ View</a>
+        </div>
+      </div>`;
+  }).join('') : `<span class="no-results">No results found for this sentence</span>`;
+
+  const selBar = filtered.length ? `
+    <div class="scene-sel-bar">
+      <span>${filtered.length} results</span>
+      <div style="display:flex;gap:6px;">
+        <button onclick="selectAllInScene(${index}, ${JSON.stringify(filtered.map((_,i)=>i))})">Select all</button>
+        <button onclick="clearScene(${index}, ${JSON.stringify(filtered.map((_,i)=>i))})">Clear</button>
+      </div>
+    </div>` : '';
 
   const card = document.createElement('div');
   card.className = 'scene-card fade-in';
@@ -343,7 +440,8 @@ function renderScene(scene, index) {
         <div class="scene-kw">→ searched: "${scene.keyword}"</div>
       </div>
     </div>
-    <div class="scene-results">${pills}</div>
+    <div class="scene-results">${cards}</div>
+    ${selBar}
   `;
   document.getElementById('scenes-wrap').appendChild(card);
 }
@@ -398,16 +496,6 @@ function setDlStatus(msg, pct) {
   if (bar && pct !== undefined) bar.style.width = Math.min(100, pct) + '%';
 }
 
-function getFileExt(url, type) {
-  try {
-    const path = new URL(url).pathname;
-    const ext = path.split('.').pop().split('?')[0].toLowerCase();
-    if (['mp4','mov','webm','avi'].includes(ext)) return ext;
-    if (['jpg','jpeg','png','webp','gif'].includes(ext)) return ext;
-  } catch(e) {}
-  return type === 'Video' ? 'mp4' : 'jpg';
-}
-
 function collectMediaItems() {
   const dlVideos = document.getElementById('dl-videos')?.checked ?? true;
   const dlPhotos = document.getElementById('dl-photos')?.checked ?? true;
@@ -444,6 +532,53 @@ async function fetchAndSave(url, filename) {
   a.click();
   // Revoke immediately after click to free memory
   setTimeout(() => { URL.revokeObjectURL(a.href); document.body.removeChild(a); }, 500);
+}
+
+async function downloadSelected() {
+  const btn = document.getElementById('dl-selected-btn');
+  if (btn) { btn.disabled = true; btn.innerHTML = 'Downloading...'; }
+  setDlStatus('', 0);
+
+  // Collect selected items
+  const items = [];
+  allScenes.forEach((scene, si) => {
+    const incVideos = document.getElementById('inc-videos').checked;
+    const incPhotos = document.getElementById('inc-photos').checked;
+    const filtered = scene.results.filter(r =>
+      (r.type==='Video'&&incVideos)||(r.type==='Photo'&&incPhotos)
+    );
+    const safe = `scene_${String(si+1).padStart(3,'0')}_${scene.keyword.replace(/[^a-z0-9]+/gi,'_').toLowerCase().slice(0,25)}`;
+    filtered.forEach((r, ri) => {
+      const key = `${si}-${ri}`;
+      if (!selectedItems.has(key) || !r.download) return;
+      const ext = getFileExt(r.download, r.type);
+      items.push({ url: r.download, filename: `${safe}_${r.type.toLowerCase()}_${ri+1}.${ext}`, type: r.type });
+    });
+  });
+
+  if (!items.length) { setDlStatus('Nothing selected.', 0); return; }
+  setDlStatus(`Downloading ${items.length} selected files...`, 2);
+
+  let done = 0; let failed = 0;
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    setDlStatus(`[${i+1}/${items.length}] ${item.filename}`, Math.round(((i+1)/items.length)*100));
+    try {
+      const res = await fetch(item.url);
+      const blob = await res.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = item.filename;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => { URL.revokeObjectURL(a.href); document.body.removeChild(a); }, 500);
+      done++;
+    } catch(e) { failed++; }
+    await new Promise(r => setTimeout(r, item.type === 'Video' ? 800 : 300));
+  }
+
+  setDlStatus(`Done! ${done} files saved${failed ? ', ' + failed + ' failed' : ''}.`, 100);
+  if (btn) { btn.disabled = false; btn.innerHTML = `Download Selected (<span id="sel-count">${selectedItems.size} selected</span>)`; }
 }
 
 async function downloadMediaFiles() {
@@ -598,24 +733,14 @@ async function runScraper() {
     setStatus(`Done — ${allResults.length} results found across ${sentences.length} scenes.`, 'ok');
     document.getElementById('dl-wrap').innerHTML = `
   <div style="margin-top:20px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:16px;">
-    <div style="font-size:10px;letter-spacing:0.15em;text-transform:uppercase;color:var(--gold-dim);margin-bottom:12px;">Download Options</div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
-      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-muted);cursor:pointer;">
-        <input type="checkbox" id="dl-videos" checked style="accent-color:var(--gold);" /> Videos
-      </label>
-      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-muted);cursor:pointer;">
-        <input type="checkbox" id="dl-photos" checked style="accent-color:var(--gold);" /> Photos
-      </label>
-      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-muted);cursor:pointer;">
-        <input type="checkbox" id="dl-first-only" checked style="accent-color:var(--gold);" /> Best match only per scene
-      </label>
-    </div>
+    <div style="font-size:10px;letter-spacing:0.15em;text-transform:uppercase;color:var(--gold-dim);margin-bottom:12px;">Download</div>
     <div style="font-size:11px;color:var(--text-dim);margin-bottom:14px;">
-      Media files download one by one directly to your Downloads folder — no browser memory limits. Data ZIP (CSV + JSON) downloads separately.
+      Click any media card to select it. Hover a card for quick save or view buttons. Use "Select all" per scene or download everything at once.
     </div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+      <button class="btn-dl" id="dl-selected-btn" onclick="downloadSelected()" disabled>Download Selected (<span id="sel-count">0 selected</span>)</button>
       <button class="btn-dl" id="dl-btn" onclick="downloadMediaFiles()">Download All Media</button>
-      <button class="btn-dl" id="dl-links-btn" onclick="downloadZip()">Download Data ZIP (CSV + JSON)</button>
+      <button class="btn-dl" id="dl-links-btn" onclick="downloadZip()">Download Data ZIP</button>
     </div>
     <div id="dl-status" style="margin-top:12px;font-size:12px;font-family:'DM Mono',monospace;color:var(--text-muted);min-height:18px;"></div>
     <div style="height:2px;background:var(--border);margin-top:8px;border-radius:1px;overflow:hidden;">
