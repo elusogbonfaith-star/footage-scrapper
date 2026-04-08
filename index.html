@@ -62,22 +62,26 @@
   .scene-num { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--gold); min-width: 28px; padding-top: 1px; }
   .scene-text { font-size: 13px; color: var(--text-muted); line-height: 1.6; flex: 1; }
   .scene-kw { font-size: 11px; color: var(--gold-dim); font-family: 'DM Mono', monospace; margin-top: 4px; }
-  .scene-results { padding: 12px 16px; display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
-  .media-card { position: relative; border-radius: 4px; overflow: hidden; border: 2px solid transparent; cursor: pointer; transition: border-color 0.15s; background: var(--surface2); }
+  .scene-results { padding: 12px 16px; display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+  @media (max-width: 800px) { .scene-results { grid-template-columns: repeat(3, 1fr); } }
+  .media-card { position: relative; border-radius: 3px; overflow: hidden; border: 2px solid transparent; cursor: pointer; transition: border-color 0.15s; background: var(--surface2); aspect-ratio: 16/9; }
   .media-card:hover { border-color: var(--gold-dim); }
   .media-card.selected { border-color: var(--gold); }
-  .media-card img { width: 100%; height: 100px; object-fit: cover; display: block; background: var(--border); }
-  .media-card .no-thumb { width: 100%; height: 100px; display: flex; align-items: center; justify-content: center; font-size: 28px; background: var(--surface2); }
-  .media-card .card-info { padding: 6px 8px; }
-  .media-card .card-type { font-size: 10px; font-family: 'DM Mono', monospace; margin-bottom: 2px; }
-  .media-card .card-title { font-size: 10px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .media-card .card-check { position: absolute; top: 6px; right: 6px; width: 20px; height: 20px; border-radius: 50%; background: var(--gold); display: none; align-items: center; justify-content: center; font-size: 12px; color: #000; font-weight: bold; }
+  .media-card img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .media-card .no-thumb { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 18px; background: var(--surface2); color: var(--text-dim); }
+  .media-card .no-thumb span { font-size: 9px; font-family: 'DM Mono', monospace; color: var(--text-dim); }
+  .media-card .card-check { position: absolute; top: 4px; right: 4px; width: 18px; height: 18px; border-radius: 50%; background: var(--gold); display: none; align-items: center; justify-content: center; font-size: 10px; color: #000; font-weight: bold; z-index: 3; }
   .media-card.selected .card-check { display: flex; }
-  .media-card .card-actions { position: absolute; bottom: 0; left: 0; right: 0; display: flex; gap: 0; opacity: 0; transition: opacity 0.15s; }
-  .media-card:hover .card-actions { opacity: 1; }
-  .card-btn { flex: 1; padding: 5px 0; font-size: 10px; font-family: 'DM Mono', monospace; text-align: center; cursor: pointer; border: none; letter-spacing: 0.05em; }
-  .card-btn-dl { background: var(--gold); color: #000; }
-  .card-btn-view { background: rgba(0,0,0,0.7); color: var(--text-muted); text-decoration: none; display: flex; align-items: center; justify-content: center; }
+  .media-card .card-badge { position: absolute; top: 4px; left: 4px; font-size: 9px; padding: 2px 5px; border-radius: 2px; font-family: 'DM Mono', monospace; font-weight: 500; z-index: 2; }
+  .badge-vid { background: rgba(201,168,76,0.85); color: #000; }
+  .badge-img { background: rgba(39,174,96,0.85); color: #000; }
+  .media-card .card-overlay { position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, transparent 50%); opacity: 0; transition: opacity 0.15s; z-index: 1; display: flex; flex-direction: column; justify-content: flex-end; }
+  .media-card:hover .card-overlay { opacity: 1; }
+  .card-title-ov { font-size: 9px; color: #ccc; padding: 0 6px 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card-actions { display: flex; gap: 0; }
+  .card-btn { flex: 1; padding: 4px 0; font-size: 9px; font-family: 'DM Mono', monospace; text-align: center; cursor: pointer; border: none; letter-spacing: 0.04em; }
+  .card-btn-dl { background: var(--gold); color: #000; font-weight: 600; }
+  .card-btn-view { background: rgba(255,255,255,0.15); color: #fff; text-decoration: none; display: flex; align-items: center; justify-content: center; }
   .card-btn-dl:hover { background: #e0b84a; }
   .no-results { font-size: 12px; color: var(--text-dim); font-style: italic; padding: 8px 0; }
   .scene-sel-bar { padding: 6px 16px; background: var(--surface2); border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: var(--text-dim); }
@@ -403,23 +407,30 @@ function renderScene(scene, index) {
     const ext = getFileExt(r.download, r.type);
     const fname = `${safe}_${r.type.toLowerCase()}_${ri+1}.${ext}`;
     const isVid = r.type === 'Video';
-    const thumbHtml = r.preview
-      ? `<img src="${r.preview}" alt="" onerror="this.parentElement.innerHTML='<div class=\"no-thumb\">${isVid ? '▶' : '◼'}</div>'" />`
-      : `<div class="no-thumb">${isVid ? '▶' : '◼'}</div>`;
-    return `
-      <div class="media-card" data-scene="${index}" data-key="${key}" onclick="toggleSelect('${key}', this)">
-        ${thumbHtml}
-        <div class="card-check">✓</div>
-        <div class="card-info">
-          <div class="card-type" style="color:${isVid ? 'var(--gold)' : '#81c784'}">${isVid ? '▶ Video' : '◼ Photo'} · ${r.source}</div>
-          <div class="card-title">${r.title}</div>
-        </div>
-        <div class="card-actions">
-          <button class="card-btn card-btn-dl" onclick="event.stopPropagation(); downloadSingle('${r.download}','${fname}')" title="Download this file">↓ Save</button>
-          <a class="card-btn card-btn-view" href="${r.page}" target="_blank" onclick="event.stopPropagation()" title="View on source site">↗ View</a>
-        </div>
-      </div>`;
-  }).join('') : `<span class="no-results">No results found for this sentence</span>`;
+    const badgeClass = isVid ? 'badge-vid' : 'badge-img';
+    const badgeLabel = isVid ? '▶ video' : '◼ photo';
+    const safeTitle = (r.title || '').replace(/'/g, '').replace(/"/g, '');
+    const safeDl = (r.download || '').replace(/'/g, '%27');
+    const safePage = (r.page || '').replace(/'/g, '%27');
+    const safeFname = fname.replace(/'/g, '_');
+    const thumbSrc = r.preview || '';
+    return [
+      '<div class="media-card" data-scene="' + index + '" data-key="' + key + '" onclick="toggleSelect('' + key + '', this)">',
+        thumbSrc
+          ? '<img src="' + thumbSrc + '" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" /><div class="no-thumb" style="display:none">' + (isVid ? '▶' : '◼') + '<span>' + r.source + '</span></div>'
+          : '<div class="no-thumb">' + (isVid ? '▶' : '◼') + '<span>' + r.source + '</span></div>',
+        '<div class="card-badge ' + badgeClass + '">' + badgeLabel + '</div>',
+        '<div class="card-check">✓</div>',
+        '<div class="card-overlay">',
+          '<div class="card-title-ov">' + safeTitle + '</div>',
+          '<div class="card-actions">',
+            '<button class="card-btn card-btn-dl" onclick="event.stopPropagation();downloadSingle('' + safeDl + '','' + safeFname + '')">↓ Save</button>',
+            '<a class="card-btn card-btn-view" href="' + safePage + '" target="_blank" onclick="event.stopPropagation()">↗ View</a>',
+          '</div>',
+        '</div>',
+      '</div>'
+    ].join('');
+  }).join('') : '<span class="no-results">No results found for this sentence</span>';
 
   const selBar = filtered.length ? `
     <div class="scene-sel-bar">
