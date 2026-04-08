@@ -399,63 +399,134 @@ async function downloadSingle(url, filename) {
 function renderScene(scene, index) {
   const incVideos = document.getElementById('inc-videos').checked;
   const incPhotos = document.getElementById('inc-photos').checked;
-  const filtered = scene.results.filter(r => (r.type==='Video'&&incVideos)||(r.type==='Photo'&&incPhotos));
-  const safe = `scene_${String(index+1).padStart(3,'0')}_${scene.keyword.replace(/[^a-z0-9]+/gi,'_').toLowerCase().slice(0,25)}`;
+  const filtered = scene.results.filter(r =>
+    (r.type==='Video' && incVideos) || (r.type==='Photo' && incPhotos)
+  );
+  const safe = 'scene_' + String(index+1).padStart(3,'0') + '_' +
+    scene.keyword.replace(/[^a-z0-9]+/gi,'_').toLowerCase().slice(0,25);
 
-  const cards = filtered.length ? filtered.map((r, ri) => {
-    const key = `${index}-${ri}`;
-    const ext = getFileExt(r.download, r.type);
-    const fname = `${safe}_${r.type.toLowerCase()}_${ri+1}.${ext}`;
-    const isVid = r.type === 'Video';
-    const badgeClass = isVid ? 'badge-vid' : 'badge-img';
-    const badgeLabel = isVid ? '▶ video' : '◼ photo';
-    const safeTitle = (r.title || '').replace(/'/g, '').replace(/"/g, '');
-    const safeDl = (r.download || '').replace(/'/g, '%27');
-    const safePage = (r.page || '').replace(/'/g, '%27');
-    const safeFname = fname.replace(/'/g, '_');
-    const thumbSrc = r.preview || '';
-    return [
-      '<div class="media-card" data-scene="' + index + '" data-key="' + key + '" onclick="toggleSelect('' + key + '', this)">',
-        thumbSrc
-          ? '<img src="' + thumbSrc + '" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" /><div class="no-thumb" style="display:none">' + (isVid ? '▶' : '◼') + '<span>' + r.source + '</span></div>'
-          : '<div class="no-thumb">' + (isVid ? '▶' : '◼') + '<span>' + r.source + '</span></div>',
-        '<div class="card-badge ' + badgeClass + '">' + badgeLabel + '</div>',
-        '<div class="card-check">✓</div>',
-        '<div class="card-overlay">',
-          '<div class="card-title-ov">' + safeTitle + '</div>',
-          '<div class="card-actions">',
-            '<button class="card-btn card-btn-dl" onclick="event.stopPropagation();downloadSingle('' + safeDl + '','' + safeFname + '')">↓ Save</button>',
-            '<a class="card-btn card-btn-view" href="' + safePage + '" target="_blank" onclick="event.stopPropagation()">↗ View</a>',
-          '</div>',
-        '</div>',
-      '</div>'
-    ].join('');
-  }).join('') : '<span class="no-results">No results found for this sentence</span>';
+  const wrap = document.createElement('div');
+  wrap.className = 'scene-results';
 
-  const selBar = filtered.length ? `
-    <div class="scene-sel-bar">
-      <span>${filtered.length} results</span>
-      <div style="display:flex;gap:6px;">
-        <button onclick="selectAllInScene(${index}, ${JSON.stringify(filtered.map((_,i)=>i))})">Select all</button>
-        <button onclick="clearScene(${index}, ${JSON.stringify(filtered.map((_,i)=>i))})">Clear</button>
-      </div>
-    </div>` : '';
+  if (!filtered.length) {
+    const empty = document.createElement('span');
+    empty.className = 'no-results';
+    empty.textContent = 'No results found for this sentence';
+    wrap.appendChild(empty);
+  } else {
+    filtered.forEach((r, ri) => {
+      const key = index + '-' + ri;
+      const isVid = r.type === 'Video';
+      const ext = getFileExt(r.download, r.type);
+      const fname = safe + '_' + r.type.toLowerCase() + '_' + (ri+1) + '.' + ext;
+
+      const card = document.createElement('div');
+      card.className = 'media-card';
+      card.dataset.scene = index;
+      card.dataset.key = key;
+
+      // Thumbnail
+      if (r.preview) {
+        const img = document.createElement('img');
+        img.src = r.preview;
+        img.alt = '';
+        img.loading = 'lazy';
+        const fallback = document.createElement('div');
+        fallback.className = 'no-thumb';
+        fallback.style.display = 'none';
+        fallback.innerHTML = (isVid ? '▶' : '◼') + '<span>' + r.source + '</span>';
+        img.onerror = function() { this.style.display='none'; fallback.style.display='flex'; };
+        card.appendChild(img);
+        card.appendChild(fallback);
+      } else {
+        const nt = document.createElement('div');
+        nt.className = 'no-thumb';
+        nt.innerHTML = (isVid ? '▶' : '◼') + '<span>' + r.source + '</span>';
+        card.appendChild(nt);
+      }
+
+      // Badge
+      const badge = document.createElement('div');
+      badge.className = 'card-badge ' + (isVid ? 'badge-vid' : 'badge-img');
+      badge.textContent = isVid ? '▶ video' : '◼ photo';
+      card.appendChild(badge);
+
+      // Checkmark
+      const check = document.createElement('div');
+      check.className = 'card-check';
+      check.textContent = '✓';
+      card.appendChild(check);
+
+      // Hover overlay
+      const overlay = document.createElement('div');
+      overlay.className = 'card-overlay';
+
+      const titleOv = document.createElement('div');
+      titleOv.className = 'card-title-ov';
+      titleOv.textContent = r.title || '';
+      overlay.appendChild(titleOv);
+
+      const actions = document.createElement('div');
+      actions.className = 'card-actions';
+
+      const saveBtn = document.createElement('button');
+      saveBtn.className = 'card-btn card-btn-dl';
+      saveBtn.textContent = '↓ Save';
+      saveBtn.onclick = function(e) {
+        e.stopPropagation();
+        downloadSingle(r.download, fname);
+      };
+
+      const viewBtn = document.createElement('a');
+      viewBtn.className = 'card-btn card-btn-view';
+      viewBtn.href = r.page || '#';
+      viewBtn.target = '_blank';
+      viewBtn.textContent = '↗ View';
+      viewBtn.onclick = function(e) { e.stopPropagation(); };
+
+      actions.appendChild(saveBtn);
+      actions.appendChild(viewBtn);
+      overlay.appendChild(actions);
+      card.appendChild(overlay);
+
+      // Select on click
+      card.onclick = function() { toggleSelect(key, card); };
+
+      wrap.appendChild(card);
+    });
+  }
+
+  const selBar = document.createElement('div');
+  selBar.className = 'scene-sel-bar';
+  selBar.innerHTML = '<span>' + filtered.length + ' results</span>';
+  const btnWrap = document.createElement('div');
+  btnWrap.style.cssText = 'display:flex;gap:6px;';
+  const selAll = document.createElement('button');
+  selAll.textContent = 'Select all';
+  selAll.onclick = function() { selectAllInScene(index, filtered); };
+  const clrBtn = document.createElement('button');
+  clrBtn.textContent = 'Clear';
+  clrBtn.onclick = function() { clearScene(index, filtered); };
+  btnWrap.appendChild(selAll);
+  btnWrap.appendChild(clrBtn);
+  selBar.appendChild(btnWrap);
 
   const card = document.createElement('div');
   card.className = 'scene-card fade-in';
-  card.innerHTML = `
-    <div class="scene-head">
-      <span class="scene-num">${String(index+1).padStart(2,'0')}</span>
-      <div>
-        <div class="scene-text">${scene.sentence}</div>
-        <div class="scene-kw">→ searched: "${scene.keyword}"</div>
-      </div>
-    </div>
-    <div class="scene-results">${cards}</div>
-    ${selBar}
-  `;
+
+  const head = document.createElement('div');
+  head.className = 'scene-head';
+  head.innerHTML =
+    '<span class="scene-num">' + String(index+1).padStart(2,'0') + '</span>' +
+    '<div><div class="scene-text">' + scene.sentence + '</div>' +
+    '<div class="scene-kw">→ searched: &quot;' + scene.keyword + '&quot;</div></div>';
+
+  card.appendChild(head);
+  card.appendChild(wrap);
+  if (filtered.length) card.appendChild(selBar);
   document.getElementById('scenes-wrap').appendChild(card);
 }
+
 
 function renderStats() {
   const videos = allResults.filter(r=>r.type==='Video').length;
